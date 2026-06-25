@@ -1,0 +1,38 @@
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.g.dart
+*.freezed.dart
+
+# Android
+android/.gradle
+android/captures/
+android/gradlew
+android/gradlew.bat
+android/local.properties
+android/key.properties        # signing config — never commit this
+android/app/release-keystore.jks  # keystore — never commit this
+android/app/google-services.json
+*.apk
+*.aab
+
+# IntelliJ / Android Studio
+*.iml
+*.ipr
+*.iws
+.idea/
+.gradle/
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Test coverage
+coverage/
