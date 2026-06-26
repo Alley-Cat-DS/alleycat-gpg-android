@@ -3,9 +3,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:openpgp/openpgp.dart';
 import '../models/pgp_key.dart';
 
-/// Manages all GPG key storage and operations.
-/// Keys are stored in Android's encrypted KeyStore via flutter_secure_storage.
-/// Private keys never leave the device and are never logged.
 class KeyService {
   KeyService._();
   static final instance = KeyService._();
@@ -31,7 +28,6 @@ class KeyService {
     try {
       final secretJson = await _storage.read(key: _secretKeysKey);
       final publicJson = await _storage.read(key: _publicKeysKey);
-
       if (secretJson != null) {
         final list = jsonDecode(secretJson) as List;
         _secretKeys = list.map((e) => PgpKey.fromJson(e as Map<String, dynamic>)).toList();
@@ -41,7 +37,6 @@ class KeyService {
         _publicKeys = list.map((e) => PgpKey.fromJson(e as Map<String, dynamic>)).toList();
       }
     } catch (e) {
-      // Storage read failure — start fresh
       _secretKeys = [];
       _publicKeys = [];
     }
@@ -61,8 +56,6 @@ class KeyService {
     );
   }
 
-  // ── Key Generation ──────────────────────────────────────────────────────────
-
   Future<PgpKey> generateKey({
     required String name,
     required String email,
@@ -72,19 +65,18 @@ class KeyService {
     int? expiryDays,
   }) async {
     final uid = comment != null && comment.isNotEmpty
-        ? '$name ($comment) <$email>'
-        : '$name <$email>';
+        ? '\$name (\$comment) <\$email>'
+        : '\$name <\$email>';
 
-    final result = await OpenPGP.generate(
-      options: Options(
-        name: name,
-        comment: comment ?? '',
-        email: email,
-        passphrase: passphrase,
-        keyType: keyType,
-        rsaBits: keyType == KeyType.rsa ? 4096 : null,
-      ),
-    );
+    final opts = Options()
+      ..name = name
+      ..comment = comment ?? ''
+      ..email = email
+      ..passphrase = passphrase
+      ..keyOptions = (KeyOptions()
+        ..rsaBits = keyType == KeyType.rsa ? 4096 : null);
+
+    final result = await OpenPGP.generate(options: opts);
 
     final key = PgpKey(
       id: _extractKeyId(result.publicKey),
@@ -97,7 +89,6 @@ class KeyService {
     );
 
     _secretKeys.add(key);
-    // Also add public key to contacts list
     _publicKeys.add(PgpKey(
       id: key.id,
       fingerprint: key.fingerprint,
@@ -112,13 +103,10 @@ class KeyService {
     return key;
   }
 
-  // ── Import ──────────────────────────────────────────────────────────────────
-
   Future<PgpKey> importPublicKey(String armoredKey) async {
     final fingerprint = await _extractFingerprint(armoredKey);
     final uid = await _extractUid(armoredKey);
 
-    // Check for duplicate
     if (_publicKeys.any((k) => k.fingerprint == fingerprint)) {
       throw Exception('This key is already in your contacts.');
     }
@@ -138,7 +126,6 @@ class KeyService {
   }
 
   Future<PgpKey> importPrivateKey(String armoredPrivate, String passphrase) async {
-    // Extract public key from private key
     final publicKey = await OpenPGP.convertPrivateKeyToPublicKey(armoredPrivate);
     final fingerprint = await _extractFingerprint(publicKey);
     final uid = await _extractUid(publicKey);
@@ -162,31 +149,20 @@ class KeyService {
     return key;
   }
 
-  // ── Crypto Operations ───────────────────────────────────────────────────────
-
   Future<String> encryptText({
     required String plaintext,
     required PgpKey recipient,
     PgpKey? sender,
     String? senderPassphrase,
   }) async {
-    if (sender != null && sender.armoredPrivate != null) {
-      return await OpenPGP.encryptSymmetricAndSign(
-        plaintext,
-        recipient.armoredPublic,
-        sender.armoredPrivate!,
-        senderPassphrase ?? '',
-      );
-    } else {
-      return await OpenPGP.encrypt(plaintext, recipient.armoredPublic);
-    }
+    return await OpenPGP.encrypt(plaintext, recipient.armoredPublic);
   }
 
   Future<String> encryptSymmetric({
     required String plaintext,
     required String passphrase,
   }) async {
-    return await OpenPGP.encryptSymmetric(plaintext, passphrase, null);
+    return await OpenPGP.encryptSymmetric(plaintext, passphrase);
   }
 
   Future<DecryptResult> decryptText({
@@ -216,7 +192,7 @@ class KeyService {
     required String ciphertext,
     required String passphrase,
   }) async {
-    return await OpenPGP.decryptSymmetric(ciphertext, passphrase, null);
+    return await OpenPGP.decryptSymmetric(ciphertext, passphrase);
   }
 
   Future<List<int>> encryptFile({
@@ -233,7 +209,7 @@ class KeyService {
     required String passphrase,
   }) async {
     final b64 = base64Encode(fileBytes);
-    final encrypted = await OpenPGP.encryptSymmetric(b64, passphrase, null);
+    final encrypted = await OpenPGP.encryptSymmetric(b64, passphrase);
     return utf8.encode(encrypted);
   }
 
@@ -255,11 +231,9 @@ class KeyService {
     required String passphrase,
   }) async {
     final armored = utf8.decode(encryptedBytes);
-    final b64 = await OpenPGP.decryptSymmetric(armored, passphrase, null);
+    final b64 = await OpenPGP.decryptSymmetric(armored, passphrase);
     return base64Decode(b64);
   }
-
-  // ── Delete ──────────────────────────────────────────────────────────────────
 
   Future<void> deletePublicKey(String fingerprint) async {
     _publicKeys.removeWhere((k) => k.fingerprint == fingerprint);
@@ -271,10 +245,7 @@ class KeyService {
     await _saveSecretKeys();
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-
   String _extractKeyId(String armoredKey) {
-    // Simple hash-based ID from the key content
     return armoredKey.hashCode.toRadixString(16).padLeft(8, '0').toUpperCase();
   }
 

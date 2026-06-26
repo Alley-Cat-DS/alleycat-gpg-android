@@ -36,3 +36,18 @@ android/app/google-services.json
 
 # Test coverage
 coverage/
+
+# CMake / NDK build cache
+android/app/.cxx/
+
+# Gradle wrapper jar (regenerated)
+android/gradle/wrapper/gradle-wrapper.jar
+
+# Java heap dumps
+*.hprof
+
+# Generated plugin registrant
+android/app/src/main/java/io/flutter/plugins/
+
+# Zip archives
+*.zip
